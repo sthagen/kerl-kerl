@@ -11,10 +11,9 @@ installation is as fast as possible.
 
 OTP Support Policy
 ------------------
-As of 2017 November 8, we are supporting OTP builds back to R15. Older builds
+As of 2020 March 3, we are supporting OTP builds back to 20. Older builds
 may or may not work. We will advance release support as new releases of OTP
-become available.  For example, when OTP 21 is released, we will support Erlang
-builds R16 and newer.
+become available.
 
 Triage cadence
 --------------
@@ -31,7 +30,8 @@ instead.
 Downloading
 -----------
 
-If you are on MacOS, and using [homebrew](https://github.com/Homebrew/brew), you can install kerl, along with shell completion, by running:
+If you are on MacOS, and using [homebrew](https://github.com/Homebrew/brew),
+you can install kerl, along with shell completion, by running:
 
     $ brew install kerl
 
@@ -45,9 +45,11 @@ Then ensure it is executable
 
 and drop it in your $PATH
 
-Optionally download and install kerl's bash_completion file from https://github.com/kerl/kerl/raw/master/bash_completion/kerl
+Optionally download and install kerl's bash_completion file from
+https://github.com/kerl/kerl/raw/master/bash_completion/kerl
 
-Optionally download and install kerl's zsh-completion file from https://github.com/kerl/kerl/raw/master/zsh_completion/_kerl
+Optionally download and install kerl's zsh-completion file from
+https://github.com/kerl/kerl/raw/master/zsh_completion/_kerl
 
 
 How it works
@@ -57,9 +59,9 @@ Kerl keeps tracks of the releases it downloads, builds and installs, allowing
 easy installations to new destinations (without complete rebuilding) and easy
 switches between Erlang/OTP installations.
 
-By default, kerl downloads source tarballs from the [official Erlang website](https://www.erlang.org), but
-you can tell kerl to download tarballs of Erlang source code from the tags
-pushed to the [official source code](https://github.com/erlang/otp) by setting `KERL_BUILD_BACKEND=git`
+By default, kerl downloads source tarballs from the [official repository tags](https://github.com/erlang/otp/tags)
+but you can tell kerl to download from the [official Erlang website](https://www.erlang.org/downloads) by setting `KERL_BUILD_BACKEND=tarball`.
+However this website does not use HTTPS and is down more often than Github.
 
 You can also install directly from a raw git repository by using the `kerl build git <git_url> <git_version> <build_name>` syntax.
 
@@ -173,7 +175,7 @@ Building from a github fork
 It is possible to build Erlang from a github fork, by using the `KERL_BUILD_BACKEND=git` and setting `OTP_GITHUB_URL` to the URL of the fork. For example, to build Basho's OTP fork:
 
     $ export KERL_BUILD_BACKEND=git
-    $ export OTP_GITHUB_URL="https://github.com/basho/otp"
+    $ export OTP_GITHUB_URL='https://github.com/basho/otp'
     $ kerl update releases
     The available releases are:
     R13B03 R13B04 R14A R14B R14B01 R14B02 R14B03 R14B04 R15A R15B R15B01 R15B01_basho1 R15B01p R15B02 R15B03 R15B03-1 R16A_RELEASE_CANDIDATE R16B R16B01 R16B01_RC1 R16B02 R16B02_basho R16B02_basho10 R16B02_basho10rc1 R16B02_basho10rc2 R16B02_basho10rc3 R16B02_basho2 R16B02_basho3 R16B02_basho4 R16B02_basho5 R16B02_basho6 R16B02_basho7 R16B02_basho8 R16B02_basho9 R16B02_basho9rc1 R16B03 R16B03-1 R16B03_yielding_binary_to_term 17.0 17.0-rc1 17.0-rc2 17.0.1 17.0.2 17.1 17.1.1 17.1.2 17.2 17.2.1 17.2.2 17.3 17.3.1 17.3.2 17.3.3 17.3.4 17.4 17.4.1 17.5 17.5.1 17.5.2 17.5.3 17.5.4 17.5.5 17.5.6 17.5.6.1 17.5.6.2 17.5.6.3 17.5.6.4 17.5.6.5 17.5.6.6 17.5.6.7 17.5.6.8 17.5.6.9 18.0 18.0-rc1 18.0-rc2 18.0.1 18.0.2 18.0.3 18.1 18.1.1 18.1.2 18.1.3 18.1.4 18.1.5 18.2 18.2.1 18.2.2 18.2.3 18.2.4 18.2.4.1 18.3 18.3.1 18.3.2 18.3.3 18.3.4 18.3.4.1 19.0 19.0-rc1 19.0-rc2 19.0.2
@@ -224,7 +226,7 @@ Directory in which to place downloaded artefacts
 
 ### KERL_BUILD_DIR
 
-Default: `${KERL_BASE_DIR}/builds
+Default: `${KERL_BASE_DIR}/builds`
 Directory in which kerl will perform builds
 
 
@@ -264,7 +266,7 @@ NB: Automatically enabled when using `KERL_BUILD_BACKEND=git`
 
 ### KERL_BUILD_BACKEND
 
-Default value: `tarball`
+Default value: `git`
 Acceptable values: `tarball`, `git`
 
 - `tarball`: Fetch erlang releases from erlang.org
@@ -273,6 +275,12 @@ Acceptable values: `tarball`, `git`
 NB: Docs are only fetched when this is set to `tarball`. To enable creation of docs when set to `git`, one must also set [`$KERL_BUILD_DOCS`](#kerl_build_docs).
 
 NB: This setting has no effect when using `kerl build git...`, which invokes kerl to directly clone a git repository and build from there.
+
+
+### KERL_BUILD_DEBUG_VM
+
+Allows building, alongside the regular VM, a debug VM (available via `cerl -debug`).
+NB: Enable this build using `KERL_BUILD_DEBUG_VM=true`
 
 
 ### OTP_GITHUB_URL
@@ -696,6 +704,46 @@ will eventually deal with this issue.
 
 Changelog
 ---------
+22 March 2021 - 2.1.1
+
+  - grep `with-ssl` (#367)
+  - Add a `\` to commands to bypass any shell alias (#363)
+  - Enable multiple doc targets (#362)
+
+26 January 2021 - 2.1.0
+
+  - Fix Big Sur build issues again (#358)
+  - Automate building a debug Erlang (#360)
+
+10 December 2020 - 2.0.2
+
+  - Fix Big Sur build issue (#356) (see also [OTP #2871](https://github.com/erlang/otp/pull/2871))
+
+20 October 2020 - 2.0.1
+
+  - Use `-path` in `find` (#345)
+  - Redownload a tarball if it's corrupted (#348)
+  - Update to build on Catalina and Big Sur (#355)
+
+4 May 2020 - 2.0.0
+
+  - **Important**: possible breaking change - releases are now fetched
+                   through github tags by default (#277)
+  - Fix documentation building, especially for inline REPL help (#336)
+  - Fix builds on Catalina (#337, #339) - if you are on Catalina and
+    need to build older Erlangs, you should downgrade your XCode to an
+    earlier version.
+
+3 March 2020 - 1.8.7
+
+  - Implement version sorting (#319)
+  - Fix CI breakage (#327)
+  - Include `erl_call` in the path (#330)
+
+16 September 2019 - 1.8.6
+
+  - Remove almost all special cases for older macOS releases
+
 25 September 2018 - 1.8.5
 
   - Support Mojave builds (#301)
@@ -771,7 +819,7 @@ Changelog
 
   - Fix environment variable handling and a typo (#179)
   - Overhaul the README; document all environment variables (#178)
-  - Store build configuration in a file. Enables detecting if configuration has 
+  - Store build configuration in a file. Enables detecting if configuration has
     changed from build to build and also allows outputing build time options
     in `kerl status` (#177)
   - Assert perl exists before attempting build (#176); fixes issue #170
@@ -806,7 +854,7 @@ Changelog
 28 June 2016 - 1.2.0
 
   - Make curl output more robust if using a .curlrc (#137)
-  - Apply patches to build older Erlangs (#138) 
+  - Apply patches to build older Erlangs (#138)
   - Add a command to output a version string (#140)
   - Do not assume success for metadata file writes (#142)
   - Fix a grammar problem (#145)

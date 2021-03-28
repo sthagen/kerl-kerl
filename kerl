@@ -27,7 +27,7 @@ unset ERL_TOP
 # Make sure CDPATH doesn't affect cd in case path is relative.
 unset CDPATH
 
-KERL_VERSION='1.8.5'
+KERL_VERSION='2.1.1'
 
 DOCSH_GITHUB_URL='https://github.com/erszcz/docsh.git'
 ERLANG_DOWNLOAD_URL='https://www.erlang.org/download'
@@ -47,6 +47,7 @@ KERL_CONFIG=${KERL_CONFIG:="$HOME"/.kerlrc}
 KERL_DOWNLOAD_DIR=${KERL_DOWNLOAD_DIR:="${KERL_BASE_DIR:?}"/archives}
 KERL_BUILD_DIR=${KERL_BUILD_DIR:="${KERL_BASE_DIR:?}"/builds}
 KERL_GIT_DIR=${KERL_GIT_DIR:="${KERL_BASE_DIR:?}"/gits}
+KERL_DOC_TARGETS=${KERL_DOC_TARGETS:="chunks"}
 
 if [ -n "$OTP_GITHUB_URL" ]; then
     _OGU="$OTP_GITHUB_URL"
@@ -81,9 +82,13 @@ fi
 if [ -n "$KERL_BUILD_DOCS" ]; then
     _KBD="$KERL_BUILD_DOCS"
 fi
+if [ -n "$KERL_DOC_TARGETS" ]; then
+    _KDT="$KERL_DOC_TARGETS"
+fi
 if [ -n "$KERL_BUILD_BACKEND" ]; then
     _KBB="$KERL_BUILD_BACKEND"
 fi
+
 OTP_GITHUB_URL=
 KERL_CONFIGURE_OPTIONS=
 KERL_CONFIGURE_APPLICATIONS=
@@ -95,6 +100,7 @@ KERL_INSTALL_MANPAGES=
 KERL_INSTALL_HTMLDOCS=
 KERL_BUILD_PLT=
 KERL_BUILD_DOCS=
+KERL_DOC_TARGETS=
 KERL_BUILD_BACKEND=
 
 # ensure the base dir exists
@@ -139,6 +145,9 @@ fi
 if [ -n "$_KBD" ]; then
     KERL_BUILD_DOCS="$_KBD"
 fi
+if [ -n "$_KDT" ]; then
+    KERL_DOC_TARGETS="$_KDT"
+fi
 if [ -n "$_KBB" ]; then
     KERL_BUILD_BACKEND="$_KBB"
 fi
@@ -150,10 +159,14 @@ else
 fi
 
 if [ -z "$KERL_BUILD_BACKEND" ]; then
-    KERL_BUILD_BACKEND='tarball'
-else
     KERL_BUILD_BACKEND='git'
+fi
+if [ "$KERL_BUILD_BACKEND" = 'git' ]; then
     KERL_USE_AUTOCONF=1
+elif [ "$KERL_BUILD_BACKEND" != 'tarball' ]; then
+    echo "Unhandled value KERL_BUILD_BACKEND='${KERL_BUILD_BACKEND}'"
+    echo "KERL_BUILD_BACKEND must be one of 'git' (default) or 'tarball'"
+    exit 1
 fi
 
 KERL_SYSTEM=$(uname -s)
@@ -206,16 +219,98 @@ get_releases() {
 }
 
 get_git_releases() {
-    git ls-remote --tags "$OTP_GITHUB_URL" \
-    | grep -E -o 'OTP[_-][^^{}]+' \
-    | sed $SED_OPT 's/OTP[_-]//' \
-    | sort -n \
-    | uniq
+    git ls-remote --tags --refs "$OTP_GITHUB_URL" \
+    | cut -f2 \
+    | cut -d'/' -f3- \
+    | sed $SED_OPT \
+        -e '# Delete all tags starting with ":" as to not mix' \
+        -e '# them with the prefixed lines we`re generating next.' \
+        -e '/^:/d' \
+        \
+        -e '# Prefix "OTP*" release lines with the crux of their versions.' \
+        -e '#  - "OTP_R16B01_RC1"  =>  ":16B01_RC1 OTP_R16B01_RC1"' \
+        -e '#  - "OTP_R16B03"      =>  ":16B03 OTP_R16B03"' \
+        -e '#  - "OTP-17.0"        =>  ":17.0 OTP-17.0"' \
+        -e '#  - "OTP-17.3.1"      =>  ":17.3.1 OTP-17.3.1"' \
+        -e '#  - "OTP-19.0-rc1"    =>  ":19.0-rc1 OTP-19.0-rc1"' \
+        -e '#  - "OTP-19.0-rc2"    =>  ":19.0-rc2 OTP-19.0-rc2"' \
+        -e 's/^(OTP[-_](R?([0-9][^ :]*).*))/:\3 \2/' \
+        \
+        -e '# Delete all lines that didn`t get prefixed above.' \
+        -e '/^[^:]/d' \
+        \
+        -e '# Move the colon markers preceding each version prefix' \
+        -e '# as to preceed the tag suffix instead, which will make' \
+        -e '# throwing the version prefixes easier later on.' \
+        -e '#  - ":16B01_RC1 OTP_R16B03"  =>  "16B01_RC1 :OTP_R16B01_RC1"' \
+        -e '#  -     ":16B03 OTP_R16B03"  =>  "16B03 :OTP_R16B03"' \
+        -e '#  -      ":17.0 OTP_R16B03"  =>  "17.0 :OTP-17.0"' \
+        -e '#  -    ":17.3.1 OTP_R16B03"  =>  "17.3.1 :OTP-17.3.1"' \
+        -e '#  -  ":19.0-rc1 OTP_R16B03"  =>  "19.0-rc1 :OTP-19.0-rc1"' \
+        -e '#  -  ":19.0-rc2 OTP_R16B03"  =>  "19.0-rc2 :OTP-19.0-rc2"' \
+        -e 's/^:([^ ]+) /\1 :/' \
+        \
+        -e '# Repeatedly replace sequences of one or more dots, dashes' \
+        -e '# or underscores, within each version prefix, with single' \
+        -e '# space characters.' \
+        -e '#  - "16B01_RC1 :OTP_R16B01_RC1"  =>  "16B01 RC1 :OTP_R16B01_RC1"' \
+        -e '#  -     "16B03 :OTP_R16B03"      =>  "16B03 :OTP_R16B03"' \
+        -e '#  -      "17.0 :OTP-17.0"        =>  "17 0 :OTP-17.0"' \
+        -e '#  -    "17.3.1 :OTP-17.3.1"      =>  "17 3 1 :OTP-17.3.1"' \
+        -e '#  -  "19.0-rc1 :OTP-19.0-rc1"    =>  "19 0 rc1 :OTP-19.0-rc1"' \
+        -e '#  -  "19.0-rc2 :OTP-19.0-rc2"    =>  "19 0 rc2 :OTP-19.0-rc2"' \
+        -e ':loop' \
+           -e 's/^([^:]*)[.-]+([^:]*) :/\1 \2 :/' \
+        -e 't loop' \
+        \
+        -e '# Repeatedly replace "A", "B", or "C" separators, within each' \
+        -e '# version prefix, with " 0 ", " 1 " and " 2 ", respectively.' \
+        -e '#  - "16B01 RC1 :OTP_R16B01_RC1"  =>  "16 1 01 RC1 :OTP_R16B01_RC1"' \
+        -e '#  -     "16B03 :OTP_R16B03"      =>  "16 1 03 :OTP_R16B03"' \
+        -e ':loop2' \
+            -e 's/^(.*[0-9]+)A([^:]*) :/\1 0 \2 :/' \
+            -e 's/^(.*[0-9]+)B([^:]*) :/\1 1 \2 :/' \
+            -e 's/^(.*[0-9]+)C([^:]*) :/\1 2 \2 :/' \
+        -e 't loop2' \
+        \
+        -e '# Repeatedly replace space-release candidate infixes, within' \
+        -e '# each version prefix, with a leading zero followed by' \
+        -e '# the candidate number.' \
+        -e '# - "16 1 01 RC1 :OTP_R16B01_RC1"  =>  "16 1 01 0 1 :OTP_R16B01_RC1"' \
+        -e '# -      "19 0 rc1 :OTP-19.0-rc1"  =>  "19 0 0 1 :OTP-19.0-rc1"' \
+        -e '# -      "19 0 rc2 :OTP-19.0-rc2"  =>  "19 0 0 2 :OTP-19.0-rc2"' \
+        -e ':loop3' \
+            -e 's/^([^:]* )(rc|RC)([0-9]+)(( [^:]*)?) :/\10 \3\4 :/' \
+        -e 't loop3' \
+        \
+        -e '# Repeatedly prefix single digits, within each version prefix,' \
+        -e '# with leading zeroes.' \
+        -e '#  - "16 1 01 0 1 :OTP_R16B01_RC1"  =>  "16 01 01 00 01 :OTP_R16B01_RC1"' \
+        -e '#  -     "16 1 03 :OTP_R16B03"      =>  "16 01 03 :OTP_R16B03"' \
+        -e '#  -        "17 0 :OTP-17.0"        =>  "17 00 :OTP-17.0"' \
+        -e '#  -      "17 3 1 :OTP-17.3.1"      =>  "17 03 01 :OTP-17.3.1"' \
+        -e '#  -    "19 0 0 1 :OTP-19.0-rc1"    =>  "19 00 00 01 :OTP-19.0-rc.1"' \
+        -e '#  -    "19 0 0 2 :OTP-19.0-rc2"    =>  "19 00 00 02 :OTP-19.0-rc.2"' \
+        -e ':loop4' \
+            -e 's/^([^:]*[^0-9:])([0-9])(([^0-9][^:]*)?) :/\10\2\3 :/' \
+        -e 't loop4' \
+        \
+        -e '# Suffix each version prefix with 00 as to not compare ':' with a number.' \
+        -e '#  - "16 01 01 00 01 :OTP_R16B01_RC1"  =>  "16 01 01 00 01 00 :OTP_R16B01_RC1"' \
+        -e '#  -       "16 01 03 :OTP_R16B03"      =>  "16 01 03 00 :OTP_R16B03"' \
+        -e '#  -          "17 00 :OTP-17.0""       =>  "17 00 00 :OTP-17.0"' \
+        -e '#  -       "17 03 01 :OTP-17.3.1"      =>  "17 03 01 00 :OTP-17.3.1"' \
+        -e '#  -    "19 00 00 01 :OTP-19.0-rc.1"   =>  "19 00 00 01 00 :OTP-19.0-rc.1"' \
+        -e '#  -    "19 00 00 02 :OTP-19.0-rc.2"   =>  "19 00 00 02 00 :OTP-19.0-rc.2"' \
+        -e 's/^([^:]+) :/\1 00 :/' \
+        \
+     | LC_ALL=C sort -n \
+     | cut -d':' -f2-
 }
 
 get_tarball_releases() {
-    tmp="$(mktemp ${TMP_DIR}/kerl.XXXXXX)"
-    if [ 200 = "$(curl -qsL --output "$tmp" --write-out '%{http_code}' $ERLANG_DOWNLOAD_URL/)" ]; then
+    tmp="$(mktemp "$TMP_DIR"/kerl.XXXXXX)"
+    if [ 200 = "$(\curl -qsL --output "$tmp" --write-out '%{http_code}' $ERLANG_DOWNLOAD_URL/)" ]; then
         sed $SED_OPT \
             -e 's/^.*<[aA] [hH][rR][eE][fF]=\"otp_src_([-0-9A-Za-z_.]+)\.tar\.gz\">.*$/\1/' \
             -e '/^R1|^[0-9]/!d' "$tmp" \
@@ -349,7 +444,7 @@ _dpkg_is_installed() {
     # gratefully stolen from
     # https://superuser.com/questions/427318/test-if-a-package-is-installed-in-apt
     # returns 0 (true) if found, 1 otherwise
-    dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | grep -q '^i'
+    dpkg-query -Wf'${db:Status-abbrev}' "$1" 2>/dev/null | \grep -q '^i'
 }
 
 _check_dpkg() {
@@ -475,7 +570,7 @@ show_configuration_warnings() {
     # $1 is logfile
     # $2 is section header (E.g. "APPLICATIONS DISABLED")
     # Find the row number for the section we are looking for
-    INDEX=$(grep -n -m1 "$2" "$1" | cut -d: -f1)
+    INDEX=$(\grep -n -m1 "$2" "$1" | cut -d: -f1)
 
     # If there are no warnings, the section won't appear in the log
     if [ -n "$INDEX" ]; then
@@ -505,6 +600,9 @@ maybe_patch() {
     case "$1" in
         Darwin)
             maybe_patch_darwin "$release"
+            # Catalina and clang require a "no-weaks-import" flag during build
+            maybe_patch_catalina "$release" "$2"
+            maybe_patch_bigsur "$release"
             ;;
         SunOS)
             maybe_patch_sunos "$release"
@@ -553,10 +651,109 @@ maybe_patch_darwin() {
         CFLAGS='-DERTS_DO_INCL_GLB_INLINE_FUNC_DEF'
         apply_darwin_compiler_patch >>"$LOGFILE"
     elif [ "$1" -eq 16 ]; then
-        # TODO: Maybe check if clang version == 9
         apply_r16_wx_ptr_patch >>"$LOGFILE"
     elif [ "$1" -ge 17 ] && [ "$1" -le 19 ]; then
         apply_wx_ptr_patch >>"$LOGFILE"
+    elif [ "$1" -ge 21 ] && [ "$1" -le 23 ]; then
+        apply_in6addr_test_patch >> "$LOGFILE"
+    fi
+}
+
+maybe_patch_catalina() {
+    clang_version=$(/usr/bin/clang --version  | head -1  | awk '{print $4}')
+    command_line_tools_version=$(xcode-select -v | awk '{print $3}' | sed 's/.$//')
+    release="$1"
+    otp_version="$2"
+
+    if is_osx_catalina && \
+        [[ "$release" -lt 23 ]] && \
+        compare_sem_version $otp_version "<" "22.3.1" && \
+        compare_sem_version $clang_version ">" "11.4" && \
+        [[ "$command_line_tools_version" -le 2373 ]]; then
+        apply_catalina_no_weak_imports_patch >>"$LOGFILE"
+    fi
+}
+
+is_osx_catalina() {
+    [[ $(uname -r) == "19"* ]]
+}
+
+compare_sem_version() {
+    version=$1
+    operator=$2
+    baseline=$3
+
+    case $operator in
+        '<')
+            [[ $(printf "$version\n$baseline" | sort --version-sort | head -n 1) != "$baseline" ]]
+            ;;
+        ('>' | "==")
+            [[ $(printf "$version\n$baseline" | sort --version-sort | head -n 1) == "$baseline" ]]
+            ;;
+    esac
+}
+
+apply_catalina_no_weak_imports_patch() {
+    patch -p1 <<'_END_PATCH'
+diff --git a/erts/configure.in b/erts/configure.in
+index 3ba8216a19..d7cebc5ebc 100644
+--- a/erts/configure.in
++++ b/erts/configure.in
+@@ -926,20 +926,16 @@ dnl for now that is the way we do it.
+ USER_LD=$LD
+ USER_LDFLAGS="$LDFLAGS"
+ LD='$(CC)'
++
+ case $host_os in
+-     darwin*)
+-	saved_LDFLAGS="$LDFLAGS"
+-	LDFLAGS="$LDFLAGS -Wl,-no_weak_imports"
+-	AC_TRY_LINK([],[],
+-		[
+-			LD_MAY_BE_WEAK=no
+-		],
+-		[
+-			LD_MAY_BE_WEAK=yes
+-			LDFLAGS="$saved_LDFLAGS"
+-		]);;
+-    *)
+-	LD_MAY_BE_WEAK=no;;
++        darwin19*)
++	    # Disable stack checking to avoid crashing with a segment fault
++	    # in macOS Catalina.
++	    AC_MSG_NOTICE([Turning off stack check on macOS 10.15 (Catalina)])
++	    CFLAGS="-Wno-error=implicit-function-declaration -fno-stack-check $CFLAGS"
++	    ;;
++        *)
++	    ;;
+ esac
+
+ AC_SUBST(LD)
+_END_PATCH
+}
+
+# https://github.com/erlang/otp/commit/f1044ef9e35da26f276b8127640e177d67aade6a.diff
+maybe_patch_bigsur() {
+    release="$1"
+    if is_osx_bigsur && \
+        [[ "$release" -lt 24 ]]; then
+        apply_bigsur_bypass_version_check >>"$LOGFILE"
+    fi
+}
+
+is_osx_bigsur() {
+    [[ $(uname -r) == "20"* ]]
+}
+
+apply_bigsur_bypass_version_check() {
+    if [ -f make/configure.in ]; then
+        echo "Bypassing version check in make/configure.in for Big Sur"
+        sed -i '' 's/\(#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ > $int_macosx_version\)/\1 \&\& false/' make/configure.in
+    elif [ -f configure.in ]; then
+        echo "Bypassing version check in configure.in for Big Sur"
+        sed -i '' 's/\(#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ > $int_macosx_version\)/\1 \&\& false/' configure.in
+        echo "Removng no_weak_imports from LDFLAGS in erts/configure.in for Big Sur"
+        sed -i '' 's/LDFLAGS="$LDFLAGS -Wl,-no_weak_imports"//' erts/configure.in
     fi
 }
 
@@ -592,12 +789,15 @@ do_normal_build() {
 
 _flags() {
     # We need to munge the LD and DED flags for clang 9/10 shipped with
-    # High Sierra (macOS 10.13) and Mojave (macOS 10.14)
+    # High Sierra (macOS 10.13) and Mojave (macOS 10.14) and quite
+    # probably for Catalina (macOS 10.15)
     case "$KERL_SYSTEM" in
         Darwin)
             osver=$(uname -r)
             case "$osver" in
-                18*|17*)
+                # TODO: Remove this in a future kerl release, probably
+                # after Catalina (10.15)
+                19*|18*|17*)
                     # Make sure we don't overwrite values that someone who
                     # knows better than us set.
                     if [ -z "$DED_LD" ]; then
@@ -626,38 +826,25 @@ _flags() {
 _do_build() {
     case "$KERL_SYSTEM" in
         Darwin)
-            OSVERSION=$(uname -r)
-
             # Ensure that the --enable-darwin-64bit flag is set on all macOS
             # That way even on older Erlangs we get 64 bit Erlang builds
             # macOS has been mandatory 64 bit for a while
-            if ! echo "$KERL_CONFIGURE_OPTIONS" | grep 'darwin-64bit' >/dev/null 2>&1; then
+            if ! echo "$KERL_CONFIGURE_OPTIONS" | \grep 'darwin-64bit' >/dev/null 2>&1; then
                 KERL_CONFIGURE_OPTIONS="$KERL_CONFIGURE_OPTIONS "--enable-darwin-64bit
             fi
 
-            case "$OSVERSION" in
-                18*|17*|16*|15*)
-                    if ! echo "$KERL_CONFIGURE_OPTIONS" | grep 'ssl' >/dev/null 2>&1; then
-                        whichbrew=$(command -v brew)
-                        if [ -n "$whichbrew" ] && [ -x "$whichbrew" ]; then
-                            brew_prefix=$(brew --prefix openssl)
-                            if [ -n "$brew_prefix" ] && [ -d "$brew_prefix" ]; then
-                                KERL_CONFIGURE_OPTIONS="$KERL_CONFIGURE_OPTIONS "--with-ssl=$brew_prefix
-                            fi
-                        elif [ ! -d /usr/include/openssl ] || [ ! -d /usr/local/include/openssl ]; then
-                            # Apple removed OpenSSL from El Capitan, but its still in this
-                            # funky location, so set ssl headers to look here
-                            xc_ssl='/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-migrator/sdk/MacOSX.sdk/usr'
-                            if [ -d "$xc_ssl"/include/openssl ]; then
-                                KERL_CONFIGURE_OPTIONS="$KERL_CONFIGURE_OPTIONS --with-ssl=$xc_ssl"
-                            fi
-                            unset xc_ssl
-                        fi
-                     fi
-                ;;
-                *)
-                ;;
-            esac
+            # Attempt to use brew to discover if and where openssl has been
+            # installed unless the user has already explictly set it.
+
+            if ! echo "$KERL_CONFIGURE_OPTIONS" | \grep 'with-ssl' >/dev/null 2>&1; then
+                whichbrew=$(command -v brew)
+                if [ -n "$whichbrew" ] && [ -x "$whichbrew" ]; then
+                    brew_prefix=$(brew --prefix openssl)
+                    if [ -n "$brew_prefix" ] && [ -d "$brew_prefix" ]; then
+                        KERL_CONFIGURE_OPTIONS="$KERL_CONFIGURE_OPTIONS "--with-ssl=$brew_prefix
+                    fi
+                fi
+            fi
         ;;
         Linux)
             # we are going to check here to see if the Linux uses dpkg or rpms
@@ -741,7 +928,7 @@ _do_build() {
         _flags ./otp_build configure $KERL_CONFIGURE_OPTIONS >>"$LOGFILE" 2>&1
 
     fi
-    if ! echo "$KERL_CONFIGURE_OPTIONS" | grep '--enable-native-libs' >/dev/null 2>&1; then
+    if ! echo "$KERL_CONFIGURE_OPTIONS" | \grep '--enable-native-libs' >/dev/null 2>&1; then
         make clean >>"$LOGFILE" 2>&1
         # shellcheck disable=SC2086
         if ! _flags ./otp_build configure $KERL_CONFIGURE_OPTIONS >>"$LOGFILE" 2>&1; then
@@ -758,7 +945,7 @@ _do_build() {
     done
 
     if [ -n "$KERL_CONFIGURE_APPLICATIONS" ]; then
-        find ./lib -maxdepth 1 -type d -exec touch -f {}/SKIP \;
+        \find ./lib -maxdepth 1 -type d -exec touch -f {}/SKIP \;
         for app in $KERL_CONFIGURE_APPLICATIONS; do
             if ! rm ./lib/"$app"/SKIP; then
                 echo "Couldn't prepare '$app' application for building"
@@ -784,13 +971,14 @@ _do_build() {
     fi
     if [ -n "$KERL_BUILD_DOCS" ]; then
         echo 'Building docs...'
-        if ! make docs >>"$LOGFILE" 2>&1; then
+        release=$(get_otp_version "$2")
+        if ! make docs "DOC_TARGETS=$KERL_DOC_TARGETS" >>"$LOGFILE" 2>&1; then
             show_logfile 'Building docs failed.' "$LOGFILE"
             list_remove builds "$1 $2"
             exit 1
         fi
-        if ! make install-docs >>"$LOGFILE" 2>&1; then
-            show_logfile 'Installing docs failed.' "$LOGFILE"
+        if ! make release_docs "DOC_TARGETS=$KERL_DOC_TARGETS" "RELEASE_ROOT=$KERL_BUILD_DIR/$2/release_$1" >>"$LOGFILE" 2>&1; then
+            show_logfile 'Release of docs failed.' "$LOGFILE"
             list_remove builds "$1 $2"
             exit 1
         fi
@@ -799,6 +987,11 @@ _do_build() {
     ERL_TOP="$ERL_TOP" ./otp_build release -a "$KERL_BUILD_DIR/$2/release_$1" >/dev/null 2>&1
     cd "$KERL_BUILD_DIR/$2/release_$1" || exit 1
     ./Install $INSTALL_OPT "$KERL_BUILD_DIR/$2/release_$1" >/dev/null 2>&1
+    if [ -n "$KERL_BUILD_DEBUG_VM" ]; then
+        echo "Also building Erlang/OTP $1 ($2) debug VM, please wait..."
+        cd $ERL_TOP/erts/emulator || exit 1
+        make debug ERL_TOP=$ERL_TOP >>"$LOGFILE" 2>&1
+    fi
 }
 
 do_install() {
@@ -818,6 +1011,14 @@ do_install() {
               cd "$absdir" && ./Install $INSTALL_OPT "$absdir" >/dev/null 2>&1); then
         echo "Couldn't install Erlang/OTP $rel ($1) in $absdir"
         exit 1
+    fi
+    BEAM_DEBUG_SMP=$(\find . -name beam.debug.smp)
+    if [ "$BEAM_DEBUG_SMP" != "" ]; then
+        ERL_CHILD_SETUP_DEBUG=$(\find . -name erl_child_setup.debug)
+        echo "Also installing Erlang/OTP $rel ($1) debug VM in $absdir..."
+        cp $BEAM_DEBUG_SMP $absdir/erts-*/bin/
+        cp $ERL_CHILD_SETUP_DEBUG $absdir/erts-*/bin/
+        cp bin/cerl $absdir/bin
     fi
     list_add installations "$1 $absdir";
     cat <<ACTIVATE >"$absdir"/activate
@@ -862,6 +1063,12 @@ kerl_deactivate() {
         unset DOCSH_USER_DEFAULT
         unset _KERL_DOCSH_USER_DEFAULT
     fi
+    if [ -n "\$_KERL_ERL_CALL_REMOVABLE" ]; then
+        # shellcheck disable=SC2001
+        PATH="\$(echo "\$PATH" | sed -e "s#\$_KERL_ERL_CALL_REMOVABLE:##")"
+        export PATH
+        unset _KERL_ERL_CALL_REMOVABLE
+    fi
     if [ -n "\$BASH" ] || [ -n "\$ZSH_VERSION" ]; then
         hash -r
     fi
@@ -885,9 +1092,12 @@ REBAR_PLT_DIR="$absdir"
 export REBAR_PLT_DIR
 _KERL_ACTIVE_DIR="$absdir"
 export _KERL_ACTIVE_DIR
+_KERL_ERL_CALL_REMOVABLE=\$(\\find $absdir -type d -wholename "*erl_interface*/bin")
+PATH="\${_KERL_ERL_CALL_REMOVABLE}:\$PATH"
+export PATH _KERL_ERL_CALL_REMOVABLE
 # https://twitter.com/mononcqc/status/877544929496629248
 export _KERL_SAVED_ERL_AFLAGS=" \$ERL_AFLAGS"
-kernel_history=\$(echo "\$ERL_AFLAGS" | grep 'kernel shell_history' || true)
+kernel_history=\$(echo "\$ERL_AFLAGS" | \\grep 'kernel shell_history' || true)
 if [ -z "\$kernel_history" ]; then
     export ERL_AFLAGS="-kernel shell_history enabled \$ERL_AFLAGS"
 fi
@@ -972,6 +1182,10 @@ function kerl_deactivate --description "deactivate erlang environment"
         set --erase DOCSH_USER_DEFAULT
         set --erase _KERL_DOCSH_USER_DEFAULT
     end
+    if set --query _KERL_ERL_CALL_REMOVABLE
+        _kerl_remove_el PATH "\$_KERL_ERL_CALL_REMOVABLE"
+        set --erase _KERL_ERL_CALL_REMOVABLE
+    end
     if test "\$argv[1]" != "nondestructive"
         functions --erase kerl_deactivate
         functions --erase _kerl_remove_el
@@ -986,6 +1200,9 @@ set -x _KERL_MANPATH_REMOVABLE "$absdir/lib/erlang/man" "$absdir/man"
 set -x MANPATH \$MANPATH "\$_KERL_MANPATH_REMOVABLE"
 set -x REBAR_PLT_DIR "$absdir"
 set -x _KERL_ACTIVE_DIR "$absdir"
+set -x _KERL_ERL_CALL_REMOVABLE (\\find "$absdir" -type d -path "*erl_interface*/bin")
+set -x PATH "\$_KERL_ERL_CALL_REMOVABLE" \$PATH
+
 if test -f "$KERL_CONFIG.fish"
     source "$KERL_CONFIG.fish"
 end
@@ -1017,7 +1234,7 @@ ACTIVATE_FISH
 # This file must be used with "source bin/activate.csh" *from csh*.
 # You cannot run it directly.
 
-alias kerl_deactivate 'test \$?_KERL_SAVED_PATH != 0 && setenv PATH "\$_KERL_SAVED_PATH" && unset _KERL_SAVED_PATH; rehash; test \$?_KERL_SAVED_MANPATH != 0 && setenv MANPATH "\$_KERL_SAVED_MANPATH" && unset _KERL_SAVED_MANPATH; test \$?_KERL_SAVED_REBAR_PLT_DIR != 0 && setenv REBAR_PLT_DIR "\$_KERL_SAVED_REBAR_PLT_DIR" && unset _KERL_SAVED_REBAR_PLT_DIR; test \$?_KERL_ACTIVE_DIR != 0 && unset _KERL_ACTIVE_DIR; test \$?_KERL_DOCSH_USER_DEFAULT != 0 && unsetenv DOCSH_USER_DEFAULT && unset _KERL_DOCSH_USER_DEFAULT; test \$?_KERL_DOCSH_DOT_ERLANG != 0 && rm "\$HOME/.erlang" && unset _KERL_DOCSH_DOT_ERLANG; test \$?_KERL_SAVED_PROMPT != 0 && set prompt="\$_KERL_SAVED_PROMPT" && unset _KERL_SAVED_PROMPT; test "!:*" != "nondestructive" && unalias deactivate'
+alias kerl_deactivate 'test \$?_KERL_SAVED_PATH != 0 && setenv PATH "\$_KERL_SAVED_PATH" && unset _KERL_SAVED_PATH; rehash; test \$?_KERL_SAVED_MANPATH != 0 && setenv MANPATH "\$_KERL_SAVED_MANPATH" && unset _KERL_SAVED_MANPATH; test \$?_KERL_SAVED_REBAR_PLT_DIR != 0 && setenv REBAR_PLT_DIR "\$_KERL_SAVED_REBAR_PLT_DIR" && unset _KERL_SAVED_REBAR_PLT_DIR; test \$?_KERL_ACTIVE_DIR != 0 && unset _KERL_ACTIVE_DIR; test \$?_KERL_DOCSH_USER_DEFAULT != 0 && unsetenv DOCSH_USER_DEFAULT && unset _KERL_DOCSH_USER_DEFAULT; test \$?_KERL_ERL_CALL_REMOVABLE != 0 && unset _KERL_ERL_CALL_REMOVABLE; test \$?_KERL_DOCSH_DOT_ERLANG != 0 && rm "\$HOME/.erlang" && unset _KERL_DOCSH_DOT_ERLANG; test \$?_KERL_SAVED_PROMPT != 0 && set prompt="\$_KERL_SAVED_PROMPT" && unset _KERL_SAVED_PROMPT; test "!:*" != "nondestructive" && unalias deactivate'
 
 # Unset irrelevant variables.
 kerl_deactivate nondestructive
@@ -1042,6 +1259,9 @@ setenv MANPATH "\${_KERL_MANPATH_REMOVABLE}:\$MANPATH"
 setenv REBAR_PLT_DIR "$absdir"
 
 set _KERL_ACTIVE_DIR = "$absdir"
+
+set _KERL_ERL_CALL_REMOVABLE = $(\find "$absdir" -type d -wholename "*erl_interface*/bin")
+setenv PATH "\${_KERL_ERL_CALL_REMOVABLE}:\$PATH"
 
 if ( -f "$KERL_CONFIG.csh" ) then
     source "$KERL_CONFIG.csh"
@@ -1080,17 +1300,9 @@ rehash
 ACTIVATE_CSH
 
     if [ -n "$KERL_BUILD_DOCS" ]; then
-        DOC_DIR="$KERL_BUILD_DIR/$1/release_$rel"/lib/erlang
-        if [ -d "$DOC_DIR" ]; then
-            echo 'Installing docs...'
-            cp $CP_OPT "$DOC_DIR/" "$absdir"/lib
-            if [ -d "$absdir"/lib/erlang/man ]; then
-                ln -s "$absdir"/lib/erlang/man "$absdir"/man
-                ln -s "$absdir"/lib/erlang/doc "$absdir"/html
-            elif [ -d "$absdir"/lib/man ]; then
-                ln -s "$absdir"/lib/man "$absdir"/man
-                ln -s "$absdir"/lib/doc "$absdir"/html
-            fi
+        if ! (ERL_TOP="$ERL_TOP" make release_docs "DOC_TARGETS=$KERL_DOC_TARGETS" "RELEASE_ROOT=$absdir" >/dev/null 2>&1); then
+            echo "Couldn't install docs for Erlang/OTP $rel ($1) in $absdir"
+            exit 1
         fi
     else
         if [ "$KERL_BUILD_BACKEND" = 'tarball' ]; then
@@ -1121,9 +1333,9 @@ ACTIVATE_CSH
         SHELL_SUFFIX=''
     else
         PID=$$
-        PARENT_PID=$(ps -p $PID -o ppid=) || exit 1
+        PARENT_PID=$(\ps -p $PID -o ppid=) || exit 1
         # shellcheck disable=SC2086
-        PARENT_CMD=$(ps -p $PARENT_PID -o ucomm | tail -n 1)
+        PARENT_CMD=$(\ps -p $PARENT_PID -o ucomm | tail -n 1)
         case "$PARENT_CMD" in
             fish)
                 SHELL_SUFFIX='.fish'
@@ -1154,7 +1366,7 @@ install_docsh() {
     OTP_VERSION=$(get_otp_version "$1")
     # This has to be updated with docsh updates
     DOCSH_SUPPORTED='^1[9]\|2[01]$'
-    if ! echo "$OTP_VERSION" | grep "$DOCSH_SUPPORTED" >/dev/null 2>&1; then
+    if ! echo "$OTP_VERSION" | \grep "$DOCSH_SUPPORTED" >/dev/null 2>&1; then
         echo "Erlang/OTP version $OTP_VERSION not supported by docsh (does not match regex $DOCSH_SUPPORTED)"
         exit 1
     fi
@@ -1248,8 +1460,8 @@ build_plt() {
     mkdir -p "$dialyzerd" || exit 1
     plt="$dialyzerd"/plt
     build_log="$dialyzerd"/build.log
-    dirs=$(find "$1"/lib -maxdepth 2 -name ebin -type d -exec dirname {} \;)
-    apps=$(for app in $dirs; do basename "$app" | cut -d- -f1 ; done | grep -Ev 'erl_interface|jinterface' | xargs echo)
+    dirs=$(\find "$1"/lib -maxdepth 2 -name ebin -type d -exec dirname {} \;)
+    apps=$(for app in $dirs; do basename "$app" | cut -d- -f1 ; done | \grep -Ev 'erl_interface|jinterface' | xargs echo)
     # shellcheck disable=SC2086
     "$1"/bin/dialyzer --output_plt "$plt" --build_plt --apps $apps >>"$build_log" 2>&1
     status=$?
@@ -1446,7 +1658,7 @@ is_valid_install_path() {
             echo "ERROR: $1 is not a directory."
             return 1
         else
-            count=$(find "$1" | wc -l)
+            count=$(\find "$1" | wc -l)
             if [ "$count" -ne 1 ]; then
                 echo "ERROR: $1 does not appear to be an empty directory."
                 return 1
@@ -1477,7 +1689,7 @@ maybe_remove() {
 
 list_print() {
     if [ -f "$KERL_BASE_DIR/otp_$1" ]; then
-        if [ "$(wc -l "$KERL_BASE_DIR/otp_$1")" != '0' ]; then
+        if [ "$(\wc -l "$KERL_BASE_DIR/otp_$1")" != '0' ]; then
             cat "$KERL_BASE_DIR/otp_$1"
             return 0
         fi
@@ -1506,7 +1718,7 @@ list_remove() {
 
 list_has() {
     if [ -f "$KERL_BASE_DIR/otp_$1" ]; then
-        grep "$2" "$KERL_BASE_DIR/otp_$1" >/dev/null 2>&1 && return 0
+        \grep "$2" "$KERL_BASE_DIR/otp_$1" >/dev/null 2>&1 && return 0
     fi
     return 1
 }
@@ -1540,14 +1752,14 @@ get_active_path() {
 
 get_name_from_install_path() {
     if [ -f "$KERL_BASE_DIR"/otp_installations ]; then
-        grep -m1 -E "$1$" "$KERL_BASE_DIR"/otp_installations | cut -d' ' -f1
+        \grep -m1 -E "$1$" "$KERL_BASE_DIR"/otp_installations | cut -d' ' -f1
     fi
     return 0
 }
 
 get_install_path_from_name() {
     if [ -f "$KERL_BASE_DIR"/otp_installations ]; then
-        grep -m1 -E "$1$" "$KERL_BASE_DIR"/otp_installations | cut -d' ' -f2
+        \grep -m1 -E "$1$" "$KERL_BASE_DIR"/otp_installations | cut -d' ' -f2
     fi
     return 0
 }
@@ -1585,10 +1797,20 @@ download() {
 }
 
 github_download() {
+    tarball_file="$KERL_DOWNLOAD_DIR/$1"
+    tarball_url="$OTP_GITHUB_URL/archive/$1"
     # if the file doesn't exist or the file has no size
-    if [ ! -s "$KERL_DOWNLOAD_DIR/$1" ]; then
-        echo "Downloading $1 to $KERL_DOWNLOAD_DIR"
-        curl -f -L -o "$KERL_DOWNLOAD_DIR/$1" "$OTP_GITHUB_URL/archive/$1" || exit 1
+    if [ ! -s $tarball_file ]; then
+        echo "Downloading $1 to $KERL_DOWNLOAD_DIR..."
+        curl -f -L -o $tarball_file $tarball_url || exit 1
+    else
+        # If the downloaded tarball was corrupted due to interruption while
+        # downloading.
+        if ! gunzip -t $tarball_file 2>/dev/null; then
+            echo "$tarball_file corrupted and redownloading..."
+            rm -rf $tarball_file
+            curl -f -L -o $tarball_file $tarball_url || exit 1
+        fi
     fi
 }
 
@@ -1601,7 +1823,7 @@ tarball_download() {
     ensure_checksum_file
     echo 'Verifying archive checksum...'
     SUM="$($MD5SUM "$KERL_DOWNLOAD_DIR/$1" | cut -d' ' -f $MD5SUM_FIELD)"
-    ORIG_SUM="$(grep -F "$1" "$KERL_DOWNLOAD_DIR"/MD5 | cut -d' ' -f2)"
+    ORIG_SUM="$(\grep -F "$1" "$KERL_DOWNLOAD_DIR"/MD5 | cut -d' ' -f2)"
     if [ "$SUM" != "$ORIG_SUM" ]; then
         echo "Checksum error, check the files in $KERL_DOWNLOAD_DIR"
         exit 1
@@ -1640,7 +1862,7 @@ apply_darwin_compiler_patch() {
 +++ erts/emulator/beam/beam_bp.c	2013-10-04 13:42:03.000000000 -0500
 @@ -496,7 +496,8 @@
  }
- 
+
  /* bp_hash */
 -ERTS_INLINE Uint bp_sched2ix() {
 +#ifndef ERTS_DO_INCL_GLB_INLINE_FUNC_DEF
@@ -1661,7 +1883,7 @@ apply_darwin_compiler_patch() {
 @@ -144,7 +144,19 @@
  #define ErtsSmpBPUnlock(BDC)
  #endif
- 
+
 -ERTS_INLINE Uint bp_sched2ix(void);
 +ERTS_GLB_INLINE Uint bp_sched2ix(void);
 +
@@ -1676,7 +1898,7 @@ apply_darwin_compiler_patch() {
 +#endif
 +}
 +#endif
- 
+
  #ifdef ERTS_SMP
  #define bp_sched2ix_proc(p) ((p)->scheduler_data->no - 1)
 _END_PATCH
@@ -1691,13 +1913,13 @@ apply_javadoc_linting_patch() {
 +++ lib/jinterface/doc/src/Makefile	2016-05-23 14:35:48.000000000 -0500
 @@ -142,7 +142,7 @@
  	rm -f errs core *~
- 
+
  jdoc:$(JAVA_SRC_FILES)
 -	(cd ../../java_src;$(JAVADOC) -sourcepath . -d $(JAVADOC_DEST) \
 +	(cd ../../java_src;$(JAVADOC) -Xdoclint:none -sourcepath . -d $(JAVADOC_DEST) \
  		-windowtitle $(JAVADOC_TITLE) $(JAVADOC_PKGS))
- 
- man: 
+
+ man:
 _END_PATCH
 }
 
@@ -1708,7 +1930,7 @@ apply_r14_beam_makeops_patch() {
 +++ erts/emulator/utils/beam_makeops	2016-05-23 21:41:08.000000000 -0500
 @@ -1576,7 +1576,7 @@
  	if $min_window{$key} > $min_window;
- 
+
      pop(@{$gen_transform{$key}})
 -	if defined @{$gen_transform{$key}}; # Fail
 +	if defined $gen_transform{$key}; # Fail
@@ -1728,7 +1950,7 @@ apply_r15_beam_makeops_patch() {
      $prev_last = pop(@{$gen_transform{$key}})
 -	if defined @{$gen_transform{$key}}; # Fail
 +	if defined $gen_transform{$key}; # Fail
- 
+
      if ($prev_last && !is_instr($prev_last, 'fail')) {
  	error("Line $line: A previous transformation shadows '$orig_transform'");
 _END_PATCH
@@ -1801,13 +2023,13 @@ index 656de7c49ad..4491d486837 100644
 @@ -1193,6 +1193,7 @@ typedef struct B2TContext_t {
      } u;
  } B2TContext;
- 
+
 +static B2TContext* b2t_export_context(Process*, B2TContext* src);
- 
+
  static uLongf binary2term_uncomp_size(byte* data, Sint size)
  {
 @@ -1225,7 +1226,7 @@ static uLongf binary2term_uncomp_size(byte* data, Sint size)
- 
+
  static ERTS_INLINE int
  binary2term_prepare(ErtsBinary2TermState *state, byte *data, Sint data_size,
 -		    B2TContext* ctx)
@@ -1847,7 +2069,7 @@ index 656de7c49ad..4491d486837 100644
 +
  	    if (erl_zlib_inflate_start(&ctx->u.uc.stream, bytes, size) != Z_OK)
  		return -1;
- 
+
  	    ctx->u.uc.dbytes = state->extp;
  	    ctx->u.uc.dleft = dest_len;
  	    ctx->state = B2TUncompressChunk;
@@ -1858,11 +2080,11 @@ index 656de7c49ad..4491d486837 100644
 @@ -1308,7 +1319,7 @@ erts_binary2term_prepare(ErtsBinary2TermState *state, byte *data, Sint data_size
  {
      Sint res;
- 
+
 -    if (binary2term_prepare(state, data, data_size, NULL) < 0 ||
 +    if (binary2term_prepare(state, data, data_size, NULL, NULL) < 0 ||
          (res=decoded_size(state->extp, state->extp + state->extsize, 0, NULL)) < 0) {
- 
+
          if (state->exttmp)
 @@ -1435,7 +1446,7 @@ static Eterm binary_to_term_int(Process* p, Uint32 flags, Eterm bin, Binary* con
              if (ctx->aligned_alloc) {
@@ -1873,6 +2095,34 @@ index 656de7c49ad..4491d486837 100644
  		ctx->state = B2TBadArg;
  	    }
              break;
+_END_PATCH
+}
+
+# https://github.com/erlang/otp/commit/4b0467c.patch
+apply_in6addr_test_patch()
+{
+
+    patch -p1 <<'_END_PATCH'
+diff --git a/erts/configure.in b/erts/configure.in
+index caa1ce568b..6ebb3d3a25 100644
+--- a/erts/configure.in
++++ b/erts/configure.in
+@@ -2191,6 +2191,7 @@ AC_CACHE_CHECK(
+ 		#include <sys/types.h>
+ 		#include <sys/socket.h>
+ 		#include <netinet/in.h>
++		#include <stdio.h>
+ 	    ]],
+ 	    [[printf("%d", in6addr_any.s6_addr[16]);]]
+ 	)],
+@@ -2214,6 +2215,7 @@ AC_CACHE_CHECK(
+ 		#include <sys/types.h>
+ 		#include <sys/socket.h>
+ 		#include <netinet/in.h>
++		#include <stdio.h>
+ 	    ]],
+ 	    [[printf("%d", in6addr_loopback.s6_addr[16]);]]
+ 	)],
 _END_PATCH
 }
 
@@ -2050,7 +2300,7 @@ case "$1" in
                 else
                     maybe_remove "$(get_install_path_from_name "$3")"
                 fi
-                escaped="$(echo "$3" | sed $SED_OPT -e 's#/$##' -e 's#\/#\\\/#g')"
+                escaped="$(echo "$3" | \sed $SED_OPT -e 's#/$##' -e 's#\/#\\\/#g')"
                 list_remove "$2"s "$escaped"
                 echo "The installation \"$3\" has been deleted"
                 ;;
