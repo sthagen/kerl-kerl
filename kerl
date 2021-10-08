@@ -27,10 +27,10 @@ unset ERL_TOP
 # Make sure CDPATH doesn't affect cd in case path is relative.
 unset CDPATH
 
-KERL_VERSION='2.2.0'
+KERL_VERSION='2.2.1'
 
 DOCSH_GITHUB_URL='https://github.com/erszcz/docsh.git'
-ERLANG_DOWNLOAD_URL='https://www.erlang.org/download'
+ERLANG_DOWNLOAD_URL='https://erlang.org/download'
 KERL_CONFIG_STORAGE_FILENAME='.kerl_config'
 
 TMP_DIR=${TMP_DIR:-'/tmp'}
@@ -827,7 +827,7 @@ _do_build() {
             if ! echo "$KERL_CONFIGURE_OPTIONS" | \grep 'with-ssl' >/dev/null 2>&1; then
                 whichbrew=$(command -v brew)
                 if [ -n "$whichbrew" ] && [ -x "$whichbrew" ]; then
-                    brew_prefix=$(brew --prefix openssl)
+                    brew_prefix=$(brew --prefix openssl@1.1)
                     if [ -n "$brew_prefix" ] && [ -d "$brew_prefix" ]; then
                         KERL_CONFIGURE_OPTIONS="$KERL_CONFIGURE_OPTIONS "--with-ssl=$brew_prefix
                     fi
@@ -1788,8 +1788,9 @@ github_download() {
     tarball_file="$KERL_DOWNLOAD_DIR/$2"
     tarball_url="$OTP_GITHUB_URL/archive/$2"
     prebuilt_url="$OTP_GITHUB_URL/releases/download/OTP-$1/otp_src_$1.tar.gz"
-    if ! curl --silent --location --fail -I $prebuilt_url > /dev/null; then
+    if curl --silent --location --fail -I $prebuilt_url > /dev/null; then
         tarball_url=$prebuilt_url
+        unset KERL_USE_AUTOCONF
     fi
     # if the file doesn't exist or the file has no size
     if [ ! -s $tarball_file ]; then

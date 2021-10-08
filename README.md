@@ -1,4 +1,4 @@
-kerl [![TravisCI build status](https://travis-ci.org/kerl/kerl.svg?branch=master)](https://travis-ci.org/kerl/kerl) [![CircleCI](https://circleci.com/gh/kerl/kerl.svg?style=svg)](https://circleci.com/gh/kerl/kerl)
+kerl [![CircleCI](https://circleci.com/gh/kerl/kerl.svg?style=svg)](https://circleci.com/gh/kerl/kerl)
 ====
 
 Easy building and installing of [Erlang/OTP](https://www.erlang.org) instances.
@@ -11,7 +11,8 @@ installation is as fast as possible.
 
 OTP Support Policy
 ------------------
-As of 2020 March 3, we are supporting OTP builds back to 20. Older builds
+As of 2021 September 17, we are supporting the current OTP release version
+and 2 prior release versions (same as upstream OTP.) Older OTP releases
 may or may not work. We will advance release support as new releases of OTP
 become available.
 
@@ -22,7 +23,7 @@ the fourth Tuesday of the month at 1 pm US/Pacific or 8 pm UTC.
 
 IRC channel
 -----------
-We have a channel on [freenode](http://webchat.freenode.net) called `#kerl` -
+We have a channel on [Libera](https://web.libera.chat/gamja/) called `#kerl` -
 feel free to join and ask support or implementation questions any time. If
 no one is around, feel free to open an issue with your question or problem
 instead.
@@ -715,6 +716,11 @@ will eventually deal with this issue.
 
 Changelog
 ---------
+8 October 2021 - 2.2.1
+
+  - Fix downloads for certain OTP releases (#383)
+  - Pin openssl to version 1.1 (#380)
+
 17 September 2021 - 2.2.0
 
   - Download prebuilt binaries (if available) from github to speed builds (#376)
