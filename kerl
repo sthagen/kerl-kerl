@@ -27,7 +27,7 @@ unset ERL_TOP
 # Make sure CDPATH doesn't affect cd in case path is relative.
 unset CDPATH
 
-KERL_VERSION='2.2.2'
+KERL_VERSION='2.2.3'
 
 DOCSH_GITHUB_URL='https://github.com/erszcz/docsh.git'
 ERLANG_DOWNLOAD_URL='https://erlang.org/download'
@@ -41,13 +41,11 @@ if [ -z "$HOME" ]; then
 fi
 
 # Default values
-OTP_GITHUB_URL=${OTP_GITHUB_URL:='https://github.com/erlang/otp'}
 KERL_BASE_DIR=${KERL_BASE_DIR:="$HOME"/.kerl}
 KERL_CONFIG=${KERL_CONFIG:="$HOME"/.kerlrc}
 KERL_DOWNLOAD_DIR=${KERL_DOWNLOAD_DIR:="${KERL_BASE_DIR:?}"/archives}
 KERL_BUILD_DIR=${KERL_BUILD_DIR:="${KERL_BASE_DIR:?}"/builds}
 KERL_GIT_DIR=${KERL_GIT_DIR:="${KERL_BASE_DIR:?}"/gits}
-KERL_DOC_TARGETS=${KERL_DOC_TARGETS:="chunks"}
 
 if [ -n "$OTP_GITHUB_URL" ]; then
     _OGU="$OTP_GITHUB_URL"
@@ -89,7 +87,7 @@ if [ -n "$KERL_BUILD_BACKEND" ]; then
     _KBB="$KERL_BUILD_BACKEND"
 fi
 
-OTP_GITHUB_URL=
+OTP_GITHUB_URL=https://github.com/erlang/otp
 KERL_CONFIGURE_OPTIONS=
 KERL_CONFIGURE_APPLICATIONS=
 KERL_CONFIGURE_DISABLE_APPLICATIONS=
@@ -100,7 +98,7 @@ KERL_INSTALL_MANPAGES=
 KERL_INSTALL_HTMLDOCS=
 KERL_BUILD_PLT=
 KERL_BUILD_DOCS=
-KERL_DOC_TARGETS=
+KERL_DOC_TARGETS=chunks
 KERL_BUILD_BACKEND=
 
 # ensure the base dir exists
@@ -1083,7 +1081,7 @@ REBAR_PLT_DIR="$absdir"
 export REBAR_PLT_DIR
 _KERL_ACTIVE_DIR="$absdir"
 export _KERL_ACTIVE_DIR
-_KERL_ERL_CALL_REMOVABLE=\$(\\find $absdir -type d -wholename "*erl_interface*/bin")
+_KERL_ERL_CALL_REMOVABLE=\$(\\find $absdir -type d -path "*erl_interface*/bin")
 PATH="\${_KERL_ERL_CALL_REMOVABLE}:\$PATH"
 export PATH _KERL_ERL_CALL_REMOVABLE
 # https://twitter.com/mononcqc/status/877544929496629248
@@ -1251,7 +1249,7 @@ setenv REBAR_PLT_DIR "$absdir"
 
 set _KERL_ACTIVE_DIR = "$absdir"
 
-set _KERL_ERL_CALL_REMOVABLE = $(\find "$absdir" -type d -wholename "*erl_interface*/bin")
+set _KERL_ERL_CALL_REMOVABLE = $(\find "$absdir" -type d -path "*erl_interface*/bin")
 setenv PATH "\${_KERL_ERL_CALL_REMOVABLE}:\$PATH"
 
 if ( -f "$KERL_CONFIG.csh" ) then
