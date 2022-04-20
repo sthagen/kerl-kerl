@@ -356,6 +356,14 @@ If unset, `$PWD` is used.
 
 If set, install the build under `$KERL_DEFAULT_INSTALL_DIR/${buildname}`.
 
+### KERL_APP_INSTALL_DIR
+
+Effective when calling `kerl upgrade`. This is the folder where the `kerl` application
+resides.
+
+If unset, `$PWD` is used.
+
+If set, `kerl` is installed at `$KERL_APP_INSTALL_DIR/kerl`.
 
 ### KERL_DEPLOY_SSH_OPTIONS
 ### KERL_DEPLOY_RSYNC_OPTIONS
@@ -716,6 +724,12 @@ will eventually deal with this issue.
 
 Changelog
 ---------
+13 April 2022 - 2.3.0
+
+  - Fix build of older OTPs on macOS Monterey (#397)
+  - Separate info and error messages onto stdout/stderr (#401 - rebased as #403)
+  - Add a new `upgrade` command to check, download and install kerl upgrades (#400)
+
 7 January 2022 - 2.2.4
 
   - Fix fish activation error (#392)
