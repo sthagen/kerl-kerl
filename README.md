@@ -205,6 +205,23 @@ Tuning
 
 You can tune kerl using the .kerlrc file in your $HOME directory.
 
+## Colors configuration
+
+### KERL_COLORIZE
+
+Default: 1 (Enabled)
+Enable VT100 colorizing if `tput` available (provided by `ncurses`). Set to 0 to disable.
+Colorization will be disabled anyway if necessary requirements are missing.
+
+Color for log levels can be overriden, by setting ANSI numerical color code to variables `KERL_COLOR_*` :
+
+- KERL_COLOR_E : (1=red) Error level color
+- KERL_COLOR_W : (3=yellow) Warning level color
+- KERL_COLOR_N : (4=blue) Notice level color
+- KERL_COLOR_T : (6=cyan) Tip level color
+- KERL_COLOR_S : (2=green) Success level color
+- KERL_COLOR_D : (9) Default Terminal color
+
 ## Locations on disk
 
 ### KERL_BASE_DIR
@@ -724,6 +741,11 @@ will eventually deal with this issue.
 
 Changelog
 ---------
+27 April 2022 - 2.4.0
+
+  - Handle a failed github retrieval better (#408)
+  - Colorize kerl output (if available) (#409)
+
 13 April 2022 - 2.3.0
 
   - Fix build of older OTPs on macOS Monterey (#397)
