@@ -131,6 +131,15 @@ Activation will backup your $PATH, prepend it with the installation's bin/
 directory. Thus it's only valid for the current shell session, and until you
 activate another installation or call `kerl_deactivate`.
 
+**Note**: alternatively you can use `kerl build-install` as a shortcut for
+the two previous actions to be played in sequence.
+
+    $ kerl build-install
+    usage: ./kerl build-install <release> [build_name] [directory]
+
+    $ kerl build-install git
+    usage: ./kerl build-install git <git_url> <git_version> <build_name> [directory]
+
 You're now ready to work with your 19.2 installation:
 
     $ erl -version
@@ -201,6 +210,13 @@ be either a branch, a tag or a commit id that will be passed to `git checkout`:
     Checking Erlang/OTP git repository from https://github.com/erlang/otp.git...
     Building Erlang/OTP 19.2_dev from git, please wait...
     Erlang/OTP 19.2_dev from git has been successfully built
+
+Debug
+-----
+
+If `KERL_DEBUG` is set to a value, then kerl will emit copious debug logging, including
+a best effort attempt at line numbers. (The line numbers may or may not be accurate if
+kerl is run under the `dash` shell` as is commonly found in Alpine Linux/Docker images.)
 
 Tuning
 ------
@@ -334,7 +350,7 @@ Available targets:
  - `man`: install manpage docs.
  - `html`: install HTML docs.
  - `pdf`: install PDF docs.
- - `chunks`: install chunnks format for get documentation from `erl`.
+ - `chunks`: install the "chunks" format to get documentation from the `erl` REPL.
 
 You can set multiple type of targets separated by space, example `$KERL_DOC_TARGETS="man html pdf chunks"`
 
@@ -362,7 +378,8 @@ The following apply when activating an installation (i.e. `. ${KERL_DEFAULT_INST
 
 ### KERL_ENABLE_PROMPT
 
-When set, automatically prefix the shell prompt with a section containing the erlang version (see [`$KERL_PROMPT_FORMAT`](#kerl_prompt_format) ).
+When set, automatically prefix the shell prompt with a section containing the
+erlang version (see [`$KERL_PROMPT_FORMAT`](#kerl_prompt_format) ).
 
 ### KERL_PROMPT_FORMAT
 
@@ -513,13 +530,17 @@ after activating a kerl installation of Erlang/OTP. Here is an example of
     # compilation options
     KERL_CONFIGURE_OPTIONS="--disable-native-libs --enable-vm-probes --with-dynamic-trace=dtrace --with-ssl=/usr/local --with-javac --enable-hipe --enable-kernel-poll --with-wx-config=/usr/local/bin/wxgtk2u-2.8-config --without-odbc --enable-threads --enable-sctp --enable-smp-support"
 
-In case you cannot access the default directory for temporary files (`/tmp`) or simply want them somewhere else, you can also provide your own directory with the variable `TMP_DIR`
+In case you cannot access the default directory for temporary files (`/tmp`) or
+simply want them somewhere else, you can also provide your own directory with
+the variable `TMP_DIR`
 
     export TMP_DIR=/your/custom/temporary/dir
 
 #### Building documentation
 
-Prior to kerl 1.0, kerl always downloaded prepared documentation from erlang.org. Now if `KERL_BUILD_DOCS=yes` is set, kerl will build the man pages and HTML
+Prior to kerl 1.0, kerl always downloaded prepared documentation from
+erlang.org. Now if `KERL_BUILD_DOCS=yes` is set, kerl will build the man pages
+and HTML
 documentation from the source repository in which is working.
 
 **Note**: This variable takes precedent over the other documentation parameters.
@@ -679,41 +700,8 @@ other tools to extract to path information.
     $ kerl path 19.2.3
     /aux/erlangs/19.2.3
 
-### install-docsh
-
-    kerl install-docsh
-
-**Important note**: docsh only supports OTP versions 18 and later.
-
-Install `erl` shell documentation access
-extension - [docsh](https://github.com/erszcz/docsh).
-This extends the shell with new helpers, which enable access to full
-function help (via `h/{1,2,3}`), function specs (`s/{1,2,3}`) and type
-information (`t/{1,2,3}`).
-
-If you already have an OTP installation, you will need to remove it and
-re-install it **before** you execute `install-docsh`,
-since docsh needs some environment variables of its own to be set up
-and managed by the activate script.
-
-Activating a docsh-enabled Erlang installation will try to create
-a `$HOME/.erlang` symlink.
-If this file exists (i.e. you have created it manually),
-please consider removing it - otherwise, docsh won't work.
-Deactivating the kerl Erlang installation will remove the symlink.
-
-Alternatively, if the file exists and you have to keep it you can extend
-it with the content of [a docsh-specific `.erlang`][docsh-dot-erlang] - this
-task is left as an exercise for the reader - and export
-`KERL_DOCSH_DOT_ERLANG=exists` to silence unwanted warnings.
-The [manual setup guide][docsh-manual-setup] will probably come in handy
-if you decide to take this route.
-
-[docsh-dot-erlang]: https://github.com/erszcz/docsh/blob/2d9843bce794e726f591bbca49c88aedbb435f8c/templates/dot.erlang
-[docsh-manual-setup]: https://github.com/erszcz/docsh/blob/ecf35821610977e36b04c0c256990a5b0dab4870/doc/manual-setup.md
-
-Compiling crypto on Macs
-------------------------
+Compiling crypto on older MacOSs
+--------------------------------
 
 Apple stopped shipping OpenSSL in OS X 10.11 (El Capitan) in favor of Apple's
 own SSL library. That makes using homebrew the most convenient way to install
@@ -727,27 +715,15 @@ to build with that location automatically.
 **Important**: If you already have `--with-ssl` in your .kerlrc, kerl
 will honor that instead, and will not do any automatic configuration.
 
-Compiling crypto on Red Hat systems
------------------------------------
-
-Red Hat believes there's a [patent
-issue](https://bugzilla.redhat.com/show_bug.cgi?id=319901#c2) and has disabled
-elliptic curve crypto algorithms in its distributions for over 10 years.
-
-This causes Erlang builds to die when its compiling its own crypto libraries.
-
-As a workaround, you can set `CFLAGS="-DOPENSSL_NO_EC=1"` to tell the
-Erlang crypto libraries to not build the elliptic curve cipher suite.
-
-This issue applies to Fedora, Red Hat Enterprise Linux, CentOS and all
-derivatives of those distributions.
-
-There is a [tracking issue](https://github.com/kerl/kerl/issues/212) to
-automatically set this compiler flag, if you wish to follow how kerl
-will eventually deal with this issue.
-
 Changelog
 ---------
+11 May 2023 - 3.0.0
+
+  - Fix shellcheck issues (#442)
+  - For CI, force install OpenSSL 1.1 on Ubuntu 22 for older OTPs (#443, #444)
+  - NEW FEATURE: a single build install step! (#419)
+  - REMOVED: docsh functionality has been removed, as it no longer needed
+             for newer OTPs (#445)
 
 18 April 2023 - 2.6.0
 
